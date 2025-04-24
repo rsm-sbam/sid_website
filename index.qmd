@@ -1,0 +1,13 @@
+---
+title: "Siddharth Bam"
+image: "Bam Info.jpg"
+about: 
+    template: jolla
+    links:
+    -   icon: envelope
+        href: mailto:sbam@ucsd.edu
+    -   icon: linkedin
+        href: https://www.linkedin.com/in/siddharthbam/
+---
+
+you know what time it is
