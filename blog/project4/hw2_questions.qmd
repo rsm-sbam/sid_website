@@ -23,7 +23,7 @@ However, Blueprinty has collected data on 1,500 mature (non-startup) engineering
 library(tidyverse)
 
 # Read the Blueprinty dataset
-blueprinty <- read_csv("/Users/siddharthbam/Desktop/marketing Analytics/sid_site/blog/project4/blueprinty.csv")
+blueprinty <- read_csv("/Users/siddharthbam/Desktop/msba/marketing Analytics/sid_site/blog/project4/blueprinty.csv")
 
 # View the first few rows of the dataset
 head(blueprinty)

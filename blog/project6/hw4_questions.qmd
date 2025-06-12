@@ -1,0 +1,312 @@
+---
+title: "Machine Learning"
+author: "Siddharth Bam"
+date: today
+---
+
+<!-- _todo: do two analyses.  Do one of either 1a or 1b, AND one of either 2a or 2b._ -->
+
+## 1a. K-Means
+
+<!-- _todo: write your own code to implement the k-means algorithm.  Make plots of the various steps the algorithm takes so you can "see" the algorithm working.  Test your algorithm on the Palmer Penguins dataset, specifically using the bill length and flipper length variables.  Compare your results to the built-in `kmeans` function in R or Python._ -->
+
+```{r}
+# Load libraries
+library(tidyverse)
+library(palmerpenguins)
+library(patchwork)
+
+# Load and clean data
+df <- penguins[, c("bill_length_mm", "flipper_length_mm")] |> 
+  drop_na()
+X <- as.matrix(df)
+```
+
+```{r}
+# Define custom K-means functions
+euclidean <- function(a, b) sqrt(sum((a - b)^2))
+
+initialize_centroids <- function(X, k) {
+  set.seed(42)
+  X[sample(1:nrow(X), k), ]
+}
+
+assign_clusters <- function(X, centroids) {
+  apply(X, 1, function(x) {
+    which.min(apply(centroids, 1, function(c) euclidean(x, c)))
+  })
+}
+
+update_centroids <- function(X, labels, k) {
+  do.call(rbind, lapply(1:k, function(i) {
+    points <- X[labels == i, , drop = FALSE]
+    if (nrow(points) > 0) colMeans(points)
+    else X[sample(1:nrow(X), 1), ]
+  }))
+}
+
+kmeans_custom <- function(X, k, max_iter = 10) {
+  centroids <- initialize_centroids(X, k)
+  history <- list(centroids)
+  
+  for (i in 1:max_iter) {
+    labels <- assign_clusters(X, centroids)
+    centroids <- update_centroids(X, labels, k)
+    history[[i + 1]] <- centroids
+  }
+  
+  list(centroids = centroids, labels = labels, history = history)
+}
+```
+
+```{r}
+# Run custom K-means
+k <- 3
+result <- kmeans_custom(X, k)
+history <- result$history
+```
+
+```{r}
+# Visualize clustering progress step-by-step
+plot_list <- map2(history, 0:(length(history) - 1), function(centroids, step) {
+  cent_df <- as.data.frame(centroids)
+  colnames(cent_df) <- c("bill_length_mm", "flipper_length_mm")
+  
+  ggplot(df, aes(x = bill_length_mm, y = flipper_length_mm)) +
+    geom_point(alpha = 0.4) +
+    geom_point(data = cent_df, aes(x = bill_length_mm, y = flipper_length_mm),
+               color = "red", size = 3, shape = 4) +
+    ggtitle(paste("Step", step)) +
+    theme_minimal()
+})
+
+wrap_plots(plot_list)
+```
+
+```{r}
+# Compare with built-in KMeans
+set.seed(42)
+kmeans_base <- kmeans(X, centers = 3)
+
+df_kmeans <- df |> mutate(cluster = factor(kmeans_base$cluster))
+centroids_df <- as.data.frame(kmeans_base$centers)
+colnames(centroids_df) <- c("bill_length_mm", "flipper_length_mm")
+
+ggplot(df_kmeans, aes(x = bill_length_mm, y = flipper_length_mm, color = cluster)) +
+  geom_point(alpha = 0.6) +
+  geom_point(data = centroids_df, aes(x = bill_length_mm, y = flipper_length_mm),
+             color = "black", size = 3, shape = 8) +
+  theme_minimal() +
+  labs(title = "Built-in KMeans Clustering")
+```
+
+
+After running both the custom K-means implementation and R's built-in kmeans() function on the Palmer Penguins dataset (using bill_length_mm and flipper_length_mm), we observe that:
+
+Cluster Assignments: While the exact cluster labels may differ (due to label switching), the overall grouping of data points is similar. Both algorithms form clusters that align with natural groupings in the data.
+Centroid Convergence: The final centroid coordinates from both implementations are very close, indicating that the custom algorithm correctly minimizes the within-cluster sum of squares over iterations.
+Convergence Steps: The custom implementation iteratively updates centroids using Euclidean distance and shows how clusters shift and stabilize, giving clear visual insight into the algorithm’s behavior. The built-in version achieves the same result more efficiently but without step-by-step visibility.
+Reproducibility: Setting the same random seed ensures both implementations start with similar initial centroids, allowing for a more direct comparison.
+In summary, the custom K-means algorithm successfully replicates the behavior of the built-in version, validating both its correctness and usefulness as a learning tool to understand clustering mechanics.
+
+
+
+<!-- _todo: Calculate both the within-cluster-sum-of-squares and silhouette scores (you can use built-in functions to do so) and plot the results for various numbers of clusters (ie, K=2,3,...,7). What is the "right" number of clusters as suggested by these two metrics?_
+
+_If you want a challenge, add your plots as an animated gif on your website so that the result looks something like [this](https://www.youtube.com/shorts/XCsoWZU9oN8)._ -->
+
+```{r}
+library(tidyverse)
+library(cluster)
+library(palmerpenguins)
+
+# Prepare the data
+df <- penguins[, c("bill_length_mm", "flipper_length_mm")] |>
+  drop_na()
+
+X <- as.matrix(df)
+```
+
+```{r}
+# Calculate WCSS (within-cluster sum of squares) and Silhouette for K = 2 to 7
+wcss <- c()
+avg_silhouette <- c()
+
+for (k in 2:7) {
+  kmeans_model <- kmeans(X, centers = k, nstart = 10)
+  wcss[k - 1] <- kmeans_model$tot.withinss
+  
+  sil <- silhouette(kmeans_model$cluster, dist(X))
+  avg_silhouette[k - 1] <- mean(sil[, 3])
+}
+
+metrics_df <- tibble(
+  k = 2:7,
+  wcss = wcss,
+  silhouette = avg_silhouette
+)
+```
+
+```{r}
+# Plot WCSS
+ggplot(metrics_df, aes(x = k, y = wcss)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Within-Cluster Sum of Squares (WCSS)",
+       x = "Number of Clusters (k)",
+       y = "WCSS") +
+  theme_minimal()
+```
+
+```{r}
+# Plot Average Silhouette Score
+ggplot(metrics_df, aes(x = k, y = silhouette)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Average Silhouette Score",
+       x = "Number of Clusters (k)",
+       y = "Silhouette Score") +
+  theme_minimal()
+```
+
+
+## 2a. K Nearest Neighbors
+
+<!-- _todo: use the following code (or the python equivalent) to generate a synthetic dataset for the k-nearest neighbors algorithm.  The code generates a dataset with two features, `x1` and `x2`, and a binary outcome variable `y` that is determined by whether `x2` is above or below a wiggly boundary defined by a sin function._
+ -->
+```{r}
+# Generate synthetic data for KNN classification
+set.seed(42)
+n <- 100
+x1 <- runif(n, -3, 3)
+x2 <- runif(n, -3, 3)
+x <- cbind(x1, x2)
+
+# Define the non-linear boundary
+boundary <- sin(4 * x1) + x1
+y <- ifelse(x2 > boundary, 1, 0) |> as.factor()
+
+# Combine into a dataframe
+dat <- data.frame(x1 = x1, x2 = x2, y = y)
+
+# Plot the data
+library(ggplot2)
+ggplot(dat, aes(x = x1, y = x2, color = y)) +
+  geom_point(size = 2, alpha = 0.7) +
+  theme_minimal() +
+  labs(title = "Synthetic Dataset with Wiggly Decision Boundary")
+```
+
+
+<!-- _todo: plot the data where the horizontal axis is `x1`, the vertical axis is `x2`, and the points are colored by the value of `y`.  You may optionally draw the wiggly boundary._
+ -->
+```{r}
+# Plot the synthetic data with optional boundary
+ggplot(dat, aes(x = x1, y = x2, color = y)) +
+  geom_point(size = 2, alpha = 0.8) +
+  stat_function(fun = function(x) sin(4 * x) + x, color = "black", linetype = "dashed") +
+  scale_color_manual(values = c("steelblue", "tomato")) +
+  theme_minimal() +
+  labs(title = "Synthetic Data with Wiggly Boundary",
+       x = "x1",
+       y = "x2",
+       color = "Class (y)")
+```
+
+
+<!-- _todo: generate a test dataset with 100 points, using the same code as above but with a different seed._ -->
+
+```{r}
+# Generate test data with a different seed
+set.seed(123)
+n_test <- 100
+x1_test <- runif(n_test, -3, 3)
+x2_test <- runif(n_test, -3, 3)
+x_test <- cbind(x1_test, x2_test)
+
+boundary_test <- sin(4 * x1_test) + x1_test
+y_test <- ifelse(x2_test > boundary_test, 1, 0) |> as.factor()
+
+test_dat <- data.frame(x1 = x1_test, x2 = x2_test, y = y_test)
+```
+
+
+<!-- _todo: implement KNN by hand.  Check you work with a built-in function -- eg, `class::knn()` or `caret::train(method="knn")` in R, or scikit-learn's `KNeighborsClassifier` in Python._ -->
+
+```{r}
+# Implement KNN by hand
+predict_knn <- function(train_x, train_y, test_x, k = 5) {
+  predict_y <- vector("numeric", nrow(test_x))
+  
+  for (i in 1:nrow(test_x)) {
+    dists <- sqrt(rowSums((t(t(train_x) - test_x[i, ]))^2))
+    neighbors <- order(dists)[1:k]
+    neighbor_classes <- train_y[neighbors]
+    predict_y[i] <- names(sort(table(neighbor_classes), decreasing = TRUE))[1]
+  }
+  
+  factor(predict_y, levels = levels(train_y))
+}
+
+# Prepare input matrices
+train_x <- dat[, c("x1", "x2")] |> as.matrix()
+train_y <- dat$y
+test_x <- test_dat[, c("x1", "x2")] |> as.matrix()
+test_y <- test_dat$y
+
+# Predict using custom KNN
+pred_knn <- predict_knn(train_x, train_y, test_x, k = 5)
+
+# Accuracy
+mean(pred_knn == test_y)
+```
+
+```{r}
+# Compare with built-in class::knn
+library(class)
+
+pred_builtin <- knn(train = train_x, test = test_x, cl = train_y, k = 5)
+mean(pred_builtin == test_y)
+```
+
+
+<!-- _todo: run your function for k=1,...,k=30, each time noting the percentage of correctly-classified points from the test dataset. Plot the results, where the horizontal axis is 1-30 and the vertical axis is the percentage of correctly-classified points. What is the optimal value of k as suggested by your plot?_  -->
+
+```{r}
+# Evaluate accuracy across k = 1 to 30
+accuracies <- numeric(30)
+
+for (k in 1:30) {
+  pred_k <- predict_knn(train_x, train_y, test_x, k = k)
+  accuracies[k] <- mean(pred_k == test_y)
+}
+
+accuracy_df <- tibble(
+  k = 1:30,
+  accuracy = accuracies * 100
+)
+
+# Plot accuracy vs. k
+ggplot(accuracy_df, aes(x = k, y = accuracy)) +
+  geom_line(color = "darkblue") +
+  geom_point(color = "red") +
+  labs(title = "KNN Accuracy vs. k",
+       x = "k (Number of Nearest Neighbors)",
+       y = "Accuracy (%)") +
+  theme_minimal()
+```
+
+
+
+
+## 2b. Key Drivers Analysis
+
+_todo: replicate the table on slide 75 of the session 5 slides. Specifically, using the dataset provided in the file data_for_drivers_analysis.csv, calculate: pearson correlations, standardized regression coefficients, "usefulness", Shapley values for a linear regression, Johnson's relative weights, and the mean decrease in the gini coefficient from a random forest. You may use packages built into R or Python; you do not need to perform these calculations "by hand."_
+
+_If you want a challenge, add additional measures to the table such as the importance scores from XGBoost, from a Neural Network, or from any additional method that measures the importance of variables._
+
+
+
+
+
+
